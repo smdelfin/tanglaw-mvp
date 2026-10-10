@@ -1,0 +1,5 @@
+fastapi==0.118.0
+uvicorn[standard]==0.37.0
+pydantic==2.11.9
+firebase-admin==7.1.0
+google-genai==1.43.0
