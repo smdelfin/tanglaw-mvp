@@ -145,20 +145,11 @@ firebase deploy --only hosting
 ## Core API Endpoints
 
 | Method | Endpoint | Description |
-| --- | --- | --- |
-| `GET` | `/api/health` | Healthcheck verification.
-
- |
-| `POST` | `/api/plans` | Evaluates barangay risk levels + diocesan inventory; generates Gemini draft action plan in Firestore.
-
- |
-| `GET` | `/api/plans` | Lists recent stored plans and review statuses.
-
- |
-| `PATCH` | `/api/plans/{plan_id}/approve` | Coordinator sign-off gate; marks document as `approved` with audit timestamps and approver name.
-
- |
-
+| :--- | :--- | :--- |
+| `GET` | `/api/health` | Healthcheck verification. |
+| `POST` | `/api/plans` | Evaluates barangay risk levels + diocesan inventory; generates Gemini draft action plan in Firestore. |
+| `GET` | `/api/plans` | Lists recent stored plans and review statuses. |
+| `PATCH` | `/api/plans/{plan_id}/approve` | Coordinator sign-off gate; marks document as `approved` with audit timestamps and approver name. |
 ---
 
 ## Human-in-the-Loop Governance
@@ -167,18 +158,3 @@ Tanglaw enforces a strict human-approval gate. AI-generated disaster plans remai
 
 ---
 
-## Version Control (GitHub)
-
-To push your latest source code updates to the main repository:
-
-```powershell
-cd C:\Projects\tanglaw-mvp
-git add .
-git commit -m "docs: update architecture rationale and deployment instructions"
-git push origin main
-
-```
-
-```
-
-```
