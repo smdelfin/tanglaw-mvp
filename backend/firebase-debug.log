@@ -1,0 +1,55 @@
+[debug] [2026-10-11T00:37:48.813Z] ----------------------------------------------------------------------
+[debug] [2026-10-11T00:37:48.815Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\smdel\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js init hosting
+[debug] [2026-10-11T00:37:48.815Z] CLI Version:   15.33.0
+[debug] [2026-10-11T00:37:48.815Z] Platform:      win32
+[debug] [2026-10-11T00:37:48.815Z] Node Version:  v26.4.0
+[debug] [2026-10-11T00:37:48.815Z] Detected Agent: unknown
+[debug] [2026-10-11T00:37:48.815Z] Time:          Sun Oct 11 2026 08:37:48 GMT+0800 (Philippine Standard Time)
+[debug] [2026-10-11T00:37:48.815Z] ----------------------------------------------------------------------
+[debug] 
+[info] 
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  C:\Projects\tanglaw-mvp\backend
+
+Before we get started, keep in mind:
+
+  * You are currently outside your home directory
+
+[info] 
+=== Project Setup
+[info] 
+[info] First, let's associate this project directory with a Firebase project.
+[info] You can create multiple project aliases by running firebase use --add, 
+[info] 
+[debug] [2026-10-11T00:38:49.342Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-10-11T00:38:49.343Z] > authorizing via signed-in user (smdelfin@gmail.com)
+[debug] [2026-10-11T00:38:49.350Z] Checked if tokens are valid: false, expires at: 1791648978439
+[debug] [2026-10-11T00:38:49.351Z] Checked if tokens are valid: false, expires at: 1791648978439
+[debug] [2026-10-11T00:38:49.351Z] > refreshing access token with scopes: []
+[debug] [2026-10-11T00:38:49.352Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-10-11T00:38:49.352Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-10-11T00:38:49.475Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-10-11T00:38:49.475Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-10-11T00:38:49.489Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects pageSize=100
+[debug] [2026-10-11T00:38:50.084Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects 200
+[debug] [2026-10-11T00:38:50.084Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects [omitted]
+[debug] [2026-10-11T00:40:10.715Z] ExitPromptError: User force closed the prompt with SIGINT
+    at Interface.sigint (C:\Users\smdel\AppData\Roaming\npm\node_modules\firebase-tools\node_modules\@inquirer\core\dist\commonjs\lib\create-prompt.js:101:37)
+    at Interface.emit (node:events:509:20)
+    at [_ttyWrite] [as _ttyWrite] (node:internal/readline/interface:1327:18)
+    at ReadStream.onkeypress (node:internal/readline/interface:284:20)
+    at ReadStream.emit (node:events:521:24)
+    at emitKeys (node:internal/readline/utils:371:14)
+    at emitKeys.next (<anonymous>)
+    at ReadStream.onData (node:internal/readline/emitKeypressEvents:64:36)
+    at ReadStream.emit (node:events:509:20)
+    at addChunk (node:internal/streams/readable:568:12)
+[error] 
+[error] Error: An unexpected error has occurred.

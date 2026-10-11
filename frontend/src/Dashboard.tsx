@@ -1,42 +1,247 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, CloudRain, Loader2, Radio, Send } from 'lucide-react';
+import React, { useState } from 'react';
+import Map, { Source, Layer } from 'react-map-gl/maplibre';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { barangayGeoJSON } from './data/barangays.geojson';
 
-type RiskLevel = 'low' | 'moderate' | 'high' | 'severe';
-type Action = { order:number; action_type:'alert'|'pre_position'|'route_check'; barangay_psgc_code:string; instruction:string; assigned_asset_ids:string[]; quantity:number; evidence_ids:string[] };
-type Plan = { id:string; storm_name:string; scenario:string; status:'draft'|'approved'; created_at:string; approved_at?:string|null; summary:string; actions:Action[]; plan_b:{scenario_name:string;changes_from_baseline:string[];actions:Action[]}; plan_c:{scenario_name:string;changes_from_baseline:string[];actions:Action[]}; alert_drafts:string[]; coordinator_notes:string[] };
-type Risk = { psgc_code:string; name:string; flood_probability:number; risk_level:RiskLevel; population:number; vulnerable_people:number; evidence_ids:string[] };
+// Interfaces matching the FastAPI/Firestore schema
+interface Alert {
+  barangay: string;
+  message_taglish: string;
+}
 
-const API = import.meta.env.VITE_API_URL ?? '';
-const demoRisks: Risk[] = [
-  {psgc_code:'DEMO-001',name:'Barangay San Roque',flood_probability:.86,risk_level:'severe',population:5100,vulnerable_people:420,evidence_ids:['rainfall-72h-001','terrain-001']},
-  {psgc_code:'DEMO-002',name:'Barangay Mabini',flood_probability:.68,risk_level:'high',population:3800,vulnerable_people:260,evidence_ids:['flood-history-002']},
-  {psgc_code:'DEMO-003',name:'Barangay Maligaya',flood_probability:.43,risk_level:'moderate',population:2900,vulnerable_people:170,evidence_ids:['rainfall-72h-003']},
-  {psgc_code:'DEMO-004',name:'Barangay Pag-asa',flood_probability:.18,risk_level:'low',population:2100,vulnerable_people:95,evidence_ids:['terrain-004']},
-];
-const colors: Record<RiskLevel,string> = {low:'bg-emerald-200 border-emerald-400',moderate:'bg-amber-200 border-amber-400',high:'bg-orange-300 border-orange-500',severe:'bg-red-400 border-red-600 text-white'};
+interface PrePosition {
+  item_type: string;
+  quantity: number;
+  destination_hall: string;
+}
+
+interface ActionPlan {
+  document_id?: string;
+  storm_name: string;
+  scenario_notes: string;
+  alerts: Alert[];
+  pre_positions: PrePosition[];
+  status: string;
+}
+
+// Define base URL
+const API_BASE_URL =
+  (import.meta as any).env?.VITE_API_BASE_URL ||
+  'https://tanglaw-api-1082115072795.asia-southeast3.run.app';
+
+// Data-driven styling for the MapLibre polygons
+const riskLayerStyle: any = {
+  id: 'barangay-risk-layer',
+  type: 'fill',
+  paint: {
+    'fill-color': [
+      'match',
+      ['get', 'risk_level'],
+      'severe', '#ef4444',
+      'high', '#f97316',
+      'moderate', '#facc15',
+      'low', '#86efac',
+      '#cccccc'
+    ],
+    'fill-opacity': 0.6,
+    'fill-outline-color': '#ffffff'
+  }
+};
 
 export default function Dashboard() {
-  const [plans,setPlans]=useState<Plan[]>([]); const [selected,setSelected]=useState<string>('');
-  const [loading,setLoading]=useState(false); const [error,setError]=useState(''); const [scenario,setScenario]=useState('baseline');
-  const current=useMemo(()=>plans.find(p=>p.id===selected) ?? plans[0],[plans,selected]);
-  const refresh=useCallback(async()=>{ try { const r=await fetch(`${API}/api/plans`); if(!r.ok) throw new Error('Could not load plans'); const rows:Plan[]=await r.json(); setPlans(rows); if(rows.length) setSelected(s=>s||rows[0].id); setError(''); } catch(e){setError(e instanceof Error?e.message:'Unknown error');}},[]);
-  useEffect(()=>{refresh(); const id=window.setInterval(refresh,10000); return()=>window.clearInterval(id);},[refresh]);
+  const [plan, setPlan] = useState<ActionPlan | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  async function generatePlan(){ setLoading(true); setError(''); try { const payload={storm_name:'Kristine',forecast_valid_at:new Date().toISOString(),hours_to_landfall:72,scenario,barangays:demoRisks,assets:[{asset_id:'hall-a',name:'Parish Hall A',barangay_psgc_code:'DEMO-001',kind:'parish_hall',quantity:1},{asset_id:'boats-a',name:'Rescue boats',barangay_psgc_code:'DEMO-001',kind:'boat',quantity:2},{asset_id:'food-c',name:'Food packs',barangay_psgc_code:'DEMO-003',kind:'food_pack',quantity:300}]}; const r=await fetch(`${API}/api/plans`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); if(!r.ok) throw new Error((await r.json()).detail ?? 'Plan generation failed'); const plan:Plan=await r.json(); setPlans(p=>[plan,...p]); setSelected(plan.id); } catch(e){setError(e instanceof Error?e.message:'Unknown error');} finally{setLoading(false);} }
-  async function approve(){ if(!current||current.status==='approved')return; const r=await fetch(`${API}/api/plans/${current.id}/approve`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({approved_by:'Demo Coordinator'})}); if(!r.ok){setError('Approval failed');return;} const updated:Plan=await r.json(); setPlans(p=>p.map(x=>x.id===updated.id?updated:x)); }
+  const handleGeneratePlan = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/plans`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storm_name: "Kristine",
+          forecast_valid_at: new Date().toISOString(),
+          hours_to_landfall: 48,
+          scenario: "baseline",
+          barangays: [
+            {
+              psgc_code: "Barangay San Roque",
+              name: "Barangay San Roque",
+              flood_probability: 0.86,
+              risk_level: "severe",
+              population: 2000,
+              vulnerable_people: 420,
+              evidence_ids: ["EVID-001"]
+            }
+          ],
+          // Add sample diocesan assets for Gemini to allocate
+          assets: [
+            {
+              asset_id: "AST-FOOD-01",
+              name: "Family Food Packs",
+              barangay_psgc_code: "Diocese HQ",
+              kind: "food_pack",
+              quantity: 500
+            },
+            {
+              asset_id: "AST-BOAT-01",
+              name: "Fiberglass Rescue Boat", // Removed stray quote
+              barangay_psgc_code: "Diocese HQ",
+              kind: "boat",
+              quantity: 2
+            },
+            {
+              asset_id: "AST-VOL-01",
+              name: "Youth Ministry Volunteers",
+              barangay_psgc_code: "Diocese HQ",
+              kind: "volunteer",
+              quantity: 25 // Removed stray quote
+            }
+          ]
+        })
+      });
 
-  return <>
-    <header className="border-b bg-white"><div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4"><div><h1 className="text-2xl font-bold text-blue-800">Tanglaw</h1><p className="text-sm text-slate-500">Coordinator dashboard · forecast to anticipatory action</p></div><span className="flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-sm text-emerald-700"><Radio size={15}/> Live · 10s refresh</span></div></header>
-    <main className="mx-auto max-w-7xl space-y-5 p-5">
-      {error&&<div className="flex gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-red-800"><AlertTriangle size={20}/>{error}</div>}
-      <section className="grid gap-5 lg:grid-cols-[1.15fr_.85fr]">
-        <div className="rounded-xl border bg-white p-5 shadow-sm"><div className="mb-4 flex items-center justify-between"><div><h2 className="font-semibold">Barangay flood-risk map</h2><p className="text-sm text-slate-500">Prototype synthetic risk cells; replace with MapLibre polygons when GIS geometry is connected.</p></div><CloudRain className="text-blue-700"/></div><div className="grid grid-cols-2 gap-3">{demoRisks.map(r=><button key={r.psgc_code} className={`min-h-28 rounded-lg border-2 p-3 text-left ${colors[r.risk_level]}`}><span className="block font-semibold">{r.name}</span><span className="text-sm capitalize">{r.risk_level} · {Math.round(r.flood_probability*100)}%</span><span className="mt-3 block text-xs">Vulnerable: {r.vulnerable_people.toLocaleString()}</span></button>)}</div><div className="mt-4 flex flex-wrap gap-3 text-xs">{(['low','moderate','high','severe'] as RiskLevel[]).map(x=><span key={x} className="flex items-center gap-1 capitalize"><i className={`h-3 w-3 rounded-sm border ${colors[x]}`}/>{x}</span>)}</div></div>
-        <div className="rounded-xl border bg-white p-5 shadow-sm"><h2 className="font-semibold">What-if scenario</h2><p className="mt-1 text-sm text-slate-500">Re-run planning against the supplied scenario.</p><select value={scenario} onChange={e=>setScenario(e.target.value)} className="mt-4 w-full rounded-lg border p-3"><option value="baseline">Baseline track</option><option value="landfall shifts 80 km south">Landfall +80 km south</option></select><button onClick={generatePlan} disabled={loading} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-3 font-semibold text-white disabled:opacity-60">{loading?<Loader2 className="animate-spin" size={18}/>:<CloudRain size={18}/>}Generate draft plan</button><div className="mt-5 border-t pt-4"><label className="text-sm font-medium">Saved plans</label><select value={current?.id??''} onChange={e=>setSelected(e.target.value)} className="mt-2 w-full rounded-lg border p-2"><option value="">No saved plans</option>{plans.map(p=><option key={p.id} value={p.id}>{p.storm_name} · {p.scenario} · {p.status}</option>)}</select></div></div>
-      </section>
-      <section className="grid gap-5 lg:grid-cols-[1fr_.55fr]">
-        <div className="rounded-xl border bg-white p-5 shadow-sm"><div className="flex items-start justify-between"><div><h2 className="font-semibold">Draft action plan</h2><p className="mt-1 text-sm text-slate-500">{current?.summary??'Generate a grounded plan from the risk and asset records.'}</p></div>{current&&<span className={`rounded-full px-3 py-1 text-xs font-semibold ${current.status==='approved'?'bg-emerald-100 text-emerald-800':'bg-amber-100 text-amber-800'}`}>{current.status}</span>}</div><ol className="mt-4 space-y-3">{current?.actions.map(a=><li key={`${a.order}-${a.instruction}`} className="flex gap-3 rounded-lg bg-slate-50 p-3"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-blue-700 text-sm font-bold text-white">{a.order}</span><div><p className="font-medium">{a.instruction}</p><p className="mt-1 text-xs text-slate-500">Evidence: {a.evidence_ids.join(', ')}</p></div></li>)??<li className="text-sm text-slate-500">No draft yet.</li>}</ol><button onClick={approve} disabled={!current||current.status==='approved'} className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-3 font-semibold text-white disabled:bg-slate-300"><Send size={18}/>Approve and send alerts</button></div>
-        <aside className="rounded-xl border bg-white p-5 shadow-sm"><h2 className="font-semibold">Approval safeguards</h2><ul className="mt-4 space-y-3 text-sm">{['AI drafts only; coordinator decides','Every action carries evidence IDs','Synthetic parish assets in this MVP','Route claims require a route check'].map(x=><li key={x} className="flex gap-2"><CheckCircle2 className="shrink-0 text-emerald-600" size={18}/>{x}</li>)}</ul>{current?.alert_drafts?.length?<><h3 className="mt-6 font-semibold">Alert drafts</h3><div className="mt-2 space-y-2">{current.alert_drafts.map((x,i)=><p className="rounded-lg bg-blue-50 p-3 text-sm" key={i}>{x}</p>)}</div></>:null}</aside>
-      </section>
-    </main>
-  </>;
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      setPlan({
+        document_id: data.id, // Capture the Firestore ID
+        storm_name: data.storm_name || "Kristine",
+        scenario_notes: data.summary || "",
+        status: data.status || "draft",
+        alerts: (data.alert_drafts || []).map((msg: string) => ({ 
+          barangay: "Targeted Barangays", 
+          message_taglish: msg 
+        })),
+        pre_positions: (data.actions || [])
+          .filter((a: any) => a.action_type === 'pre_position')
+          .map((a: any) => ({
+            item_type: a.instruction || "Assigned Assets", // Use Gemini's text
+            quantity: a.quantity || 0, 
+            destination_hall: a.barangay_psgc_code 
+          }))
+      });
+    } catch (error) {
+      console.error("Error generating plan:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+const handleApprove = async () => {
+    if (!plan?.document_id) return;
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/plans/${plan.document_id}/approve`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved_by: "Sherwin Delfin" })
+      });
+      
+      if (response.ok) {
+        alert("Plan Approved! Status saved to Firestore.");
+        setPlan({ ...plan, status: 'approved' });
+      }
+    } catch (error) {
+      console.error("Approval failed:", error);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-8 font-sans">
+      <header className="mb-8 flex justify-between items-center border-b pb-4">
+        <h1 className="text-3xl font-bold text-blue-900">Tanglaw | Coordinator Dashboard</h1>
+        <button 
+          onClick={handleGeneratePlan} 
+          disabled={loading}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md shadow"
+        >
+          {loading ? "Drafting Plan..." : "Run AI Agent (Generate Draft)"}
+        </button>
+      </header>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Live MapLibre Risk Map */}
+        <div className="lg:col-span-1 bg-white p-6 rounded-lg shadow border">
+          <h2 className="text-xl font-semibold mb-4">Barangay Risk Map</h2>
+          
+          <div className="h-96 rounded-lg overflow-hidden border border-gray-300 shadow-inner relative">
+            <Map
+              initialViewState={{
+                longitude: 121.100,
+                latitude: 14.580,
+                zoom: 13.5
+              }}
+              mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+              interactive={true}
+            >
+              <Source id="barangays" type="geojson" data={barangayGeoJSON}>
+                <Layer {...riskLayerStyle} />
+              </Source>
+            </Map>
+          </div>
+
+          <div className="mt-4">
+            <h3 className="font-semibold text-gray-700">What-if Scenario:</h3>
+            <p className="text-sm text-gray-600 bg-yellow-100 p-2 rounded mt-1 border border-yellow-200">
+              Landfall +80 km south
+            </p>
+          </div>
+        </div>
+
+        {/* Draft Action Plan & Approval Gate */}
+        <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow border">
+          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Draft Action Plan</h2>
+          
+          {!plan ? (
+            <p className="text-gray-500 italic">No active draft. Run the AI agent to generate an anticipatory plan up to 72 hours before landfall.</p>
+          ) : (
+            <div>
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-gray-800 mb-2">1. Pre-positioning Assets</h3>
+                <ul className="list-disc pl-5 space-y-3 mt-2">
+                  {plan.pre_positions.map((pos, idx) => (
+                    <li key={idx} className="text-gray-700 leading-snug">
+                      <span className="font-bold">{pos.quantity}x</span> {pos.item_type}
+                      <br /><span className="text-sm font-semibold text-blue-600">Destination: {pos.destination_hall}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-gray-800 mb-2">2. Parish Alerts</h3>
+                <ul className="space-y-3">
+                  {plan.alerts.map((alert, idx) => (
+                    <li key={idx} className="bg-blue-50 p-3 rounded border border-blue-100">
+                      <p className="font-semibold text-sm text-blue-800">{alert.barangay}</p>
+                      <p className="text-gray-700 mt-1 italic">"{alert.message_taglish}"</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="mt-8 flex justify-end">
+                {plan.status === 'draft' ? (
+                  <button 
+                    onClick={handleApprove}
+                    className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg shadow font-semibold text-lg"
+                  >
+                    Approve and Send Alerts
+                  </button>
+                ) : (
+                  <span className="text-green-600 font-bold text-lg bg-green-50 px-4 py-2 rounded-lg border border-green-200">
+                    Plan Approved & Dispatched ✓
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }

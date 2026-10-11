@@ -110,9 +110,11 @@ def utcnow() -> datetime:
 
 
 app = FastAPI(title="Tanglaw API", version="0.1.0")
-allowed_origins = [x.strip() for x in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",") if x.strip()]
+# Update this line to include your Firebase URL alongside localhost
+allowed_origins = [x.strip() for x in os.getenv("CORS_ORIGINS", "https://tanglaw-app-2026.web.app,http://localhost:5173").split(",") if x.strip()]
 app.add_middleware(
     CORSMiddleware,
+    # Update this line to include your Firebase URL alongside localhost
     allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
@@ -129,12 +131,17 @@ def db():
     return _db
 
 
+_client = None
+
 def gemini_client() -> genai.Client:
-    project = os.getenv("GOOGLE_CLOUD_PROJECT")
-    location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
-    if not project:
-        raise RuntimeError("GOOGLE_CLOUD_PROJECT is required")
-    return genai.Client(vertexai=True, project=project, location=location)
+    global _client
+    if _client is None:
+        project = os.getenv("GOOGLE_CLOUD_PROJECT")
+        location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+        if not project:
+            raise RuntimeError("GOOGLE_CLOUD_PROJECT is required")
+        _client = genai.Client(vertexai=True, project=project, location=location)
+    return _client
 
 
 def build_prompt(payload: ForecastPlanRequest) -> str:
