@@ -48,6 +48,22 @@ const riskLayerStyle: any = {
   }
 };
 
+const labelLayerStyle: any = {
+  id: 'barangay-labels',
+  type: 'symbol',
+  layout: {
+    'text-field': ['get', 'name'], // Reads the 'name' property from your GeoJSON
+    'text-size': 14,
+    'text-anchor': 'center',
+    'text-justify': 'center'
+  },
+  paint: {
+    'text-color': '#1f2937', // Dark gray text
+    'text-halo-color': '#ffffff', // White outline for readability over colors
+    'text-halo-width': 2
+  }
+};
+
 export default function Dashboard() {
   const [plan, setPlan] = useState<ActionPlan | null>(null);
   const [loading, setLoading] = useState(false);
@@ -153,7 +169,7 @@ const handleApprove = async () => {
   return (
     <div className="min-h-screen bg-gray-50 p-8 font-sans">
       <header className="mb-8 flex justify-between items-center border-b pb-4">
-        <h1 className="text-3xl font-bold text-blue-900">Tanglaw | Coordinator Dashboard</h1>
+        <h1 className="text-3xl font-bold text-blue-900">Tanglaw | Church Coordinator Dashboard</h1>
         <button 
           onClick={handleGeneratePlan} 
           disabled={loading}
@@ -180,6 +196,7 @@ const handleApprove = async () => {
             >
               <Source id="barangays" type="geojson" data={barangayGeoJSON}>
                 <Layer {...riskLayerStyle} />
+                <Layer {...labelLayerStyle} />
               </Source>
             </Map>
           </div>
@@ -194,7 +211,22 @@ const handleApprove = async () => {
 
         {/* Draft Action Plan & Approval Gate */}
         <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow border">
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Draft Action Plan</h2>
+          <div className="flex flex-wrap items-center justify-between border-b pb-2 mb-4 gap-2">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-800">Draft Action Plan</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Anticipatory intervention window: <strong className="text-gray-700">T-48h to T-72h before landfall</strong>
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs bg-blue-100 text-blue-800 font-semibold px-2.5 py-1 rounded-full border border-blue-200 shadow-sm">
+                Forecast Horizon: 48h to Landfall
+              </span>
+              <span className="text-xs bg-amber-100 text-amber-800 font-semibold px-2.5 py-1 rounded-full border border-amber-200 shadow-sm">
+                Mode: Anticipatory Staging
+              </span>
+            </div>
+          </div>
           
           {!plan ? (
             <p className="text-gray-500 italic">No active draft. Run the AI agent to generate an anticipatory plan up to 72 hours before landfall.</p>
@@ -213,7 +245,7 @@ const handleApprove = async () => {
               </div>
 
               <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-800 mb-2">2. Parish Alerts</h3>
+                <h3 className="text-lg font-bold text-gray-800 mb-2">2. Church Alerts</h3>
                 <ul className="space-y-3">
                   {plan.alerts.map((alert, idx) => (
                     <li key={idx} className="bg-blue-50 p-3 rounded border border-blue-100">
