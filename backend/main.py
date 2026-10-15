@@ -118,8 +118,19 @@ app.add_middleware(
     allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["*"],
+    expose_headers=["*"]
 )
+
+from telemetry import (
+    TanglawTelemetryMiddleware,
+    telemetry_router,
+    generate_with_telemetry,
+)
+
+# Make sure allow_headers=["*"] and expose_headers=["*"] are set on CORSMiddleware
+app.add_middleware(TanglawTelemetryMiddleware)
+app.include_router(telemetry_router)
 
 _db = None
 
@@ -168,16 +179,27 @@ def health():
 @app.post("/api/plans", response_model=StoredPlan, status_code=201)
 def create_plan(payload: ForecastPlanRequest):
     try:
-        response = gemini_client().models.generate_content(
-            model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+        barangay_codes = ",".join(sorted(b.psgc_code for b in payload.barangays))
+        asset_ids = ",".join(sorted(a.asset_id for a in payload.assets))
+        prefix_key = f"{payload.storm_name}::{barangay_codes}::{asset_ids}"
+
+        response = generate_with_telemetry(
+            client=gemini_client(),
+            model_name=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
             contents=build_prompt(payload),
             config=types.GenerateContentConfig(
                 temperature=0.2,
                 response_mime_type="application/json",
                 response_schema=ActionPlan,
             ),
+            endpoint_name="/api/plans",
+            prefix_cache_key=prefix_key,
         )
-        plan = response.parsed if isinstance(response.parsed, ActionPlan) else ActionPlan.model_validate_json(response.text)
+        plan = (
+            response.parsed
+            if isinstance(response.parsed, ActionPlan)
+            else ActionPlan.model_validate_json(response.text)
+        )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Vertex AI plan generation failed: {exc}") from exc
 
